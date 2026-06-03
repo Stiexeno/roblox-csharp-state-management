@@ -1,10 +1,10 @@
 namespace StateManagement
 {
-    // Marker interface every state class implements. Adds no methods on
-    // its own — lifecycle behaviour comes from also implementing one or
-    // more of IEnter / IExit / IExecutable / IFixedExecutable /
-    // ILateExecutable. Without IState the state machine's generic
-    // constraint won't compile, so this is the gate that distinguishes
-    // a state class from any other DI-bound type.
+    /// <summary>
+    /// Marker for state classes the <see cref="StateMachine"/> can transition into.
+    /// Combine with <see cref="IEnter"/>, <see cref="IExit"/>, <see cref="IExecutable"/>,
+    /// <see cref="IFixedExecutable"/>, or <see cref="ILateExecutable"/> to opt into
+    /// lifecycle callbacks.
+    /// </summary>
     public interface IState { }
 }

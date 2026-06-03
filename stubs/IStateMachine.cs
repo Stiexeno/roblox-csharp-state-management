@@ -1,13 +1,15 @@
 namespace StateManagement
 {
-    // State machine surface that callers depend on. Transition is via
-    // a single generic method — `Enter<NextState>()` — keyed by the
-    // state's C# type. The implementation resolves the state through
-    // IStateFactory, runs the outgoing state's Exit (if it implements
-    // IExit), swaps current, then runs the incoming state's Enter
-    // (if it implements IEnter).
+    /// <summary>
+    /// Transitions between <see cref="IState"/> implementations. Inject and call
+    /// <see cref="Enter{TState}"/> to drive the machine.
+    /// </summary>
     public interface IStateMachine
     {
+        /// <summary>
+        /// Exits the current state (if any) and enters <typeparamref name="TState"/>,
+        /// invoking the matching lifecycle callbacks.
+        /// </summary>
         void Enter<TState>() where TState : IState;
     }
 }

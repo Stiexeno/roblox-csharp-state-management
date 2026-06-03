@@ -1,9 +1,8 @@
 namespace StateManagement
 {
-    // Optional lifecycle hook. Called once when the state is leaving —
-    // before the next state's Enter, and after the last per-frame
-    // dispatch. Use it to tear down subscriptions / pooled resources
-    // that don't survive the transition.
+    /// <summary>
+    /// Called once when the state machine transitions out of this state.
+    /// </summary>
     public interface IExit
     {
         void Exit();
