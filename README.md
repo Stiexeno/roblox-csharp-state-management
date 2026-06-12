@@ -9,7 +9,7 @@ roblox-csharp plugin add Stiexeno/roblox-csharp-dependency-injection
 roblox-csharp plugin add Stiexeno/roblox-csharp-state-management
 ```
 
-The DI plugin is a hard requirement: `StateFactory` resolves states through the container's auto-bound `IInstantiator`, and the machine's tick subscriptions are wired by `Container.Bootstrap()` via `IInitializable`. Runtime mounts at `ReplicatedStorage.Plugins.StateManagement`.
+The DI plugin is a hard requirement: `StateFactory` resolves states through the container's auto-bound `IInstantiator`, and the machine implements `ITickable` / `IFixedTickable` / `ILateTickable` — the container drives every tick after `Container.Bootstrap()`; the machine owns no RunService connections of its own. Runtime mounts at `ReplicatedStorage.Plugins.StateManagement`.
 
 ## Usage
 
@@ -48,12 +48,12 @@ Inject `IStateMachine` and call `machine.Enter<GameplayState>()`. States don't n
 | `IExecutable` | `Execute(double dt)` — per frame: `RenderStepped` on the client (pre-frame), `Heartbeat` on the server. |
 | `IFixedExecutable` | `FixedExecute(double dt)` — physics step, `RunService.Stepped`. |
 | `ILateExecutable` | `LateExecute(double dt)` — post-physics, `RunService.Heartbeat` (server + client). On the server it shares the Heartbeat with `Execute`, dispatched second. |
-| `IStateMachine` / `StateMachine` | `Enter<TState>()` exits the current state, builds a fresh `TState` via the factory, enters it. `Initialize()` (virtual) wires the tick subscriptions — fired by `Container.Bootstrap()`. `Stop()` disconnects them, exits the current state, drops queued transitions. |
+| `IStateMachine` / `StateMachine` | `Enter<TState>()` exits the current state, builds a fresh `TState` via the factory, enters it. `Tick` / `FixedTick` / `LateTick` are container-driven and dispatch the matching state hooks. `Stop()` exits the current state and drops queued transitions; dispatch no-ops until the next `Enter`. |
 | `IStateFactory` / `StateFactory` | `Create<TState>()` — transient, DI-constructed state instances. |
 
 ## Caveats
 
-- **Ticks don't run until `Container.Bootstrap()`** — that's what calls `Initialize()`. A second `Initialize()` is a warned no-op. `Stop()` re-arms it.
+- **Ticks don't run until `Container.Bootstrap()`** — the container wires the tick interfaces there, after every `Initialize()`.
 - **Transitions during a transition queue.** `Enter<T>()` from inside `Enter()`/`Exit()` doesn't nest — requests queue FIFO and apply after the current transition completes. `Enter()`/`Exit()` errors are warned, never wedge the machine.
 - **States are transient.** `Enter<T>()` to the currently active state class exits it and builds a fresh instance.
 - Single active state — no stacks, history, guards, or async transitions.

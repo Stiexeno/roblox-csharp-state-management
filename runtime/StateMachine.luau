@@ -1,7 +1,7 @@
 -- Base state machine. The user's GameStateMachine subclass inherits
 -- from this; binding via `BindInterfacesTo<GameStateMachine>().AsSingle()`
 -- registers the machine under every interface it implements
--- (IStateMachine + IInitializable, plus the user's own IGameStateMachine
+-- (IStateMachine + the tickables, plus the user's own IGameStateMachine
 -- if they added one).
 --
 -- Lifecycle interfaces are name-checked against each state's
@@ -11,19 +11,14 @@
 -- transition; the resulting booleans are cached on `_currentFlags`
 -- and the per-frame handlers only read the cache.
 --
--- Per-frame dispatch is driven by RunService, mapped per side so every
--- hook fires everywhere and Execute is the pre-frame tick:
---   IExecutable       → RenderStepped on the client, Heartbeat on the
---                       server (RenderStepped doesn't exist there)
---   IFixedExecutable  → RunService.Stepped (server + client, pre-physics)
---   ILateExecutable   → RunService.Heartbeat (server + client). The
---                       Roblox frame runs RenderStepped → Stepped →
---                       physics → Heartbeat, so this is genuinely
---                       "late" on the client; on the server Execute
---                       and LateExecute share one Heartbeat connection
---                       with Execute dispatched first.
-
-local RunService = game:GetService("RunService")
+-- The machine owns NO RunService connections: it implements the DI
+-- plugin's ITickable / IFixedTickable / ILateTickable, and the
+-- container drives those after Bootstrap (client: RenderStepped →
+-- Tick, Heartbeat → LateTick; server: Heartbeat → Tick then LateTick;
+-- both: Stepped → FixedTick). State hooks map straight through:
+--   IExecutable       ← Tick
+--   IFixedExecutable  ← FixedTick
+--   ILateExecutable   ← LateTick
 
 local StateMachine = setmetatable({}, {
 	__tostring = function() return "StateMachine" end,
@@ -31,7 +26,7 @@ local StateMachine = setmetatable({}, {
 StateMachine.__index = StateMachine
 
 StateMachine.__ctorParams = { "IStateFactory" }
-StateMachine.__interfaces = { "IStateMachine", "IInitializable" }
+StateMachine.__interfaces = { "IStateMachine", "ITickable", "IFixedTickable", "ILateTickable" }
 
 function StateMachine.new(...)
 	local self = setmetatable({}, StateMachine)
@@ -44,8 +39,6 @@ function StateMachine:constructor(factory)
 	self._currentFlags = nil
 	self._transitioning = false
 	self._queue = {}
-	self._connections = {}
-	self._initialized = false
 end
 
 -- Walks an instance's class + base-class metatable chain collecting
@@ -153,63 +146,35 @@ function StateMachine:Enter(stateClass)
 	self._transitioning = false
 end
 
--- IInitializable hook. Container.Bootstrap() instantiates singletons
--- bound under IInitializable and fires Initialize() — this is when
--- we wire the RunService subscriptions, ensuring no per-frame
--- dispatch runs before the state machine is ready. Calling it a
--- second time is a warned no-op so subscriptions can't double.
-function StateMachine:Initialize()
-	if self._initialized then
-		warn("StateMachine: Initialize() called twice — ignoring")
-		return
-	end
-	self._initialized = true
-
-	if RunService:IsClient() then
-		table.insert(self._connections, RunService.RenderStepped:Connect(function(dt)
-			self:_dispatchExecute(dt)
-		end))
-		table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
-			self:_dispatchLateExecute(dt)
-		end))
-	else
-		table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
-			self:_dispatchExecute(dt)
-			self:_dispatchLateExecute(dt)
-		end))
-	end
-
-	table.insert(self._connections, RunService.Stepped:Connect(function(_time, dt)
-		local current = self._current
-		if current ~= nil and self._currentFlags.fixedExecutable then
-			current:FixedExecute(dt)
-		end
-	end))
-end
-
-function StateMachine:_dispatchExecute(dt)
+-- Container-driven ticks (ITickable / IFixedTickable / ILateTickable).
+-- No connection management here — Bootstrap wires these once and the
+-- guards below no-op while no state is active (including after Stop).
+function StateMachine:Tick(dt)
 	local current = self._current
 	if current ~= nil and self._currentFlags.executable then
 		current:Execute(dt)
 	end
 end
 
-function StateMachine:_dispatchLateExecute(dt)
+function StateMachine:FixedTick(dt)
+	local current = self._current
+	if current ~= nil and self._currentFlags.fixedExecutable then
+		current:FixedExecute(dt)
+	end
+end
+
+function StateMachine:LateTick(dt)
 	local current = self._current
 	if current ~= nil and self._currentFlags.lateExecutable then
 		current:LateExecute(dt)
 	end
 end
 
--- Teardown: disconnects every tick subscription, exits the current
--- state (pcall'd, like any transition), drops any queued transitions
--- and clears current. Initialize() may be called again afterwards.
+-- Teardown: exits the current state (pcall'd, like any transition),
+-- drops any queued transitions and clears current. The container's
+-- tick dispatch keeps firing but no-ops with no current state; Enter
+-- starts the machine again.
 function StateMachine:Stop()
-	for _, connection in ipairs(self._connections) do
-		connection:Disconnect()
-	end
-	table.clear(self._connections)
-	self._initialized = false
 	table.clear(self._queue)
 
 	local current = self._current
