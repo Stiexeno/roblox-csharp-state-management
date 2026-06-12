@@ -16,8 +16,15 @@ namespace StateManagement
 
         /// <summary>
         /// Wires RunService tick callbacks. Subclass and call <c>base.Initialize()</c>
-        /// to extend.
+        /// to extend. Calling it a second time is a warned no-op.
         /// </summary>
         public virtual void Initialize() { }
+
+        /// <summary>
+        /// Tears the machine down: disconnects all tick subscriptions, exits the
+        /// current state, and drops any queued transitions. <see cref="Initialize"/>
+        /// may be called again afterwards.
+        /// </summary>
+        public void Stop() { }
     }
 }

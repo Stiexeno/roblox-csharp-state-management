@@ -1,4 +1,5 @@
 {
   "name": "StateManagement",
-  "version": "0.1.0-prototype"
+  "version": "0.1.0-prototype",
+  "minTranspilerVersion": "0.1.0-alpha.52"
 }

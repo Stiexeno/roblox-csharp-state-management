@@ -27,7 +27,16 @@ end
 
 -- `Create<TState>()` lowers via the standard generic-arg pass to
 -- `Create(stateClass)` where stateClass is the C# type table.
+-- Validated up front — a nil / non-class argument would otherwise
+-- error deep inside the instantiator's `__ctorParams` walk.
 function StateFactory:Create(stateClass)
+	if stateClass == nil then
+		error("StateFactory:Create — state class is nil", 2)
+	end
+	if type(stateClass) ~= "table" or type(rawget(stateClass, "new")) ~= "function" then
+		error("StateFactory:Create — expected a state class, got "
+			.. typeof(stateClass) .. " (" .. tostring(stateClass) .. ")", 2)
+	end
 	return self._instantiator:Instantiate(stateClass)
 end
 
