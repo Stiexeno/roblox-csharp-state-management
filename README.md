@@ -45,9 +45,9 @@ Inject `IStateMachine` and call `machine.Enter<GameplayState>()`. States don't n
 | `IState` | Marker; required constraint on `Enter<TState>()`. |
 | `IEnter` | `Enter()` — once, on transition in. |
 | `IExit` | `Exit()` — once, on transition out. |
-| `IExecutable` | `Execute(double dt)` — per frame, `RunService.Heartbeat`. |
+| `IExecutable` | `Execute(double dt)` — per frame: `RenderStepped` on the client (pre-frame), `Heartbeat` on the server. |
 | `IFixedExecutable` | `FixedExecute(double dt)` — physics step, `RunService.Stepped`. |
-| `ILateExecutable` | `LateExecute(double dt)` — pre-render, `RunService.RenderStepped` (client only). |
+| `ILateExecutable` | `LateExecute(double dt)` — post-physics, `RunService.Heartbeat` (server + client). On the server it shares the Heartbeat with `Execute`, dispatched second. |
 | `IStateMachine` / `StateMachine` | `Enter<TState>()` exits the current state, builds a fresh `TState` via the factory, enters it. `Initialize()` (virtual) wires the tick subscriptions — fired by `Container.Bootstrap()`. `Stop()` disconnects them, exits the current state, drops queued transitions. |
 | `IStateFactory` / `StateFactory` | `Create<TState>()` — transient, DI-constructed state instances. |
 

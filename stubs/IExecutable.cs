@@ -1,7 +1,9 @@
 namespace StateManagement
 {
     /// <summary>
-    /// Per-frame tick for the active state, driven by <c>RunService.Heartbeat</c>.
+    /// Per-frame tick for the active state. Client: <c>RunService.RenderStepped</c>
+    /// (pre-frame). Server: <c>RunService.Heartbeat</c> (RenderStepped doesn't
+    /// exist there).
     /// </summary>
     public interface IExecutable
     {

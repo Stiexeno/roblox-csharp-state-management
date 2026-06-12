@@ -11,13 +11,17 @@
 -- transition; the resulting booleans are cached on `_currentFlags`
 -- and the per-frame handlers only read the cache.
 --
--- Per-frame dispatch is driven by RunService:
---   IExecutable       → RunService.Heartbeat     (server + client)
---   IFixedExecutable  → RunService.Stepped       (server + client)
---   ILateExecutable   → RunService.RenderStepped (client only)
--- The RenderStepped subscription is gated by RunService:IsClient()
--- so the server doesn't try to bind a render hook that doesn't
--- exist in its context.
+-- Per-frame dispatch is driven by RunService, mapped per side so every
+-- hook fires everywhere and Execute is the pre-frame tick:
+--   IExecutable       → RenderStepped on the client, Heartbeat on the
+--                       server (RenderStepped doesn't exist there)
+--   IFixedExecutable  → RunService.Stepped (server + client, pre-physics)
+--   ILateExecutable   → RunService.Heartbeat (server + client). The
+--                       Roblox frame runs RenderStepped → Stepped →
+--                       physics → Heartbeat, so this is genuinely
+--                       "late" on the client; on the server Execute
+--                       and LateExecute share one Heartbeat connection
+--                       with Execute dispatched first.
 
 local RunService = game:GetService("RunService")
 
@@ -161,12 +165,19 @@ function StateMachine:Initialize()
 	end
 	self._initialized = true
 
-	table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
-		local current = self._current
-		if current ~= nil and self._currentFlags.executable then
-			current:Execute(dt)
-		end
-	end))
+	if RunService:IsClient() then
+		table.insert(self._connections, RunService.RenderStepped:Connect(function(dt)
+			self:_dispatchExecute(dt)
+		end))
+		table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
+			self:_dispatchLateExecute(dt)
+		end))
+	else
+		table.insert(self._connections, RunService.Heartbeat:Connect(function(dt)
+			self:_dispatchExecute(dt)
+			self:_dispatchLateExecute(dt)
+		end))
+	end
 
 	table.insert(self._connections, RunService.Stepped:Connect(function(_time, dt)
 		local current = self._current
@@ -174,14 +185,19 @@ function StateMachine:Initialize()
 			current:FixedExecute(dt)
 		end
 	end))
+end
 
-	if RunService:IsClient() then
-		table.insert(self._connections, RunService.RenderStepped:Connect(function(dt)
-			local current = self._current
-			if current ~= nil and self._currentFlags.lateExecutable then
-				current:LateExecute(dt)
-			end
-		end))
+function StateMachine:_dispatchExecute(dt)
+	local current = self._current
+	if current ~= nil and self._currentFlags.executable then
+		current:Execute(dt)
+	end
+end
+
+function StateMachine:_dispatchLateExecute(dt)
+	local current = self._current
+	if current ~= nil and self._currentFlags.lateExecutable then
+		current:LateExecute(dt)
 	end
 end
 
